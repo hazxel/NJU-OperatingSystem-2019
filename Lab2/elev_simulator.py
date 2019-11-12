@@ -15,6 +15,7 @@ class Elevator(Process):
 		self.pipes = pipes
 		self.upFloors = [False for i in range(floorNum)]
 		self.downFloors = [False for i in range(floorNum)]
+		self.insideFloors = [False for i in range(floorNum)]
 
 	def run(self):
 		print("I am elevator.")
@@ -22,11 +23,13 @@ class Elevator(Process):
 			time.sleep(1)
 			# read ctrl pad, update usr cmd
 			if self.pipes[0].poll():
-				print(self.pipes[0].recv())			
+				self.insideFloors = self.pipes[0].recv()
+				# print(self.insideFloors)			
 
 			for i in range(1,self.fn+1):
 				if self.pipes[i].poll():
 					self.upFloors[i-1], self.downFloors[i-1] = self.pipes[i].recv()
+					# print(self.upFloors[i-1],self.downFloors[i-1])
 			# move
 			# send self state 
 			for p in self.pipes:
@@ -38,17 +41,19 @@ class eleCtrlPad(Process):
 		super(eleCtrlPad, self).__init__()
 		self.fn = floorNum
 		self.floorBtns = [False for i in range(floorNum)]
-		self.openBtn = False
-		self.closeBtn = False
 		self.curFloor = [None]
 		self.pipe = pipe
 
 	def run(self):
 		print("this is control pad of elevator")
 		mutex = threading.RLock()
-		# recv usr cmd, send to ele
-		# show ele state
-
+		s = screen(mutex, self.pipe, self.curFloor)
+		p = elePad(mutex, self.pipe, self.curFloor, self.floorBtns)
+		s.start()
+		p.start()
+		s.join()
+		p.join()
+		
 
 class floorCtrlPad(Process):
 	def __init__(self, floor, pipe):
@@ -62,7 +67,7 @@ class floorCtrlPad(Process):
 		print("this is control pad of floor " + str(self.floor))
 		mutex = threading.RLock()
 
-		s = screen(mutex, self.pipe, self.floor, self.curFloor)
+		s = screen(mutex, self.pipe, self.curFloor)
 		p = floorPad(mutex, self.pipe, self.floor, self.curFloor, self.btns)
 		s.start()
 		p.start()
@@ -71,11 +76,10 @@ class floorCtrlPad(Process):
 
 
 class screen(threading.Thread):
-	def __init__(self, mutex, pipe, floor, curFloor):
+	def __init__(self, mutex, pipe, curFloor):
 		super(screen, self).__init__()
 		self.mutex = mutex
 		self.pipe = pipe
-		self.floor = floor
 		self.curFloor = curFloor
 
 	def run(self):
@@ -85,17 +89,41 @@ class screen(threading.Thread):
 			if self.mutex.acquire():
 				if self.pipe.poll():
 					self.curFloor[0],state = self.pipe.recv()
-					print("screen F%s: elevator is on %s floor, and is on state %s"%(self.floor, self.curFloor[0], state))
+					print("elevator on %s floor, is %s"%(self.curFloor[0], state))
 					self.mutex.release()
 
 
 class elePad(threading.Thread):
-	def __init__(self, mutex, pipe):
+	def __init__(self, mutex, pipe, curFloor, btns):
 		super(elePad, self).__init__()
+		self.mutex = mutex
+		self.pipe = pipe
+		self.curFloor = curFloor
+		self.btns = btns
+		self.mem = [b for b in btns]
 	
+	def btnChanged(self):
+		for i in range(len(self.btns)):
+			if self.mem[i] != self.btns[i]:
+				self.mem[i] = self.btns[i]
+				return True
+		return False
+
 	def run(self):
-		# recv usr cmd, send to ele
-		pass
+		time.sleep(1)
+		if self.mutex.acquire():
+			self.pipe.send(self.btns)
+			self.mutex.release()
+		while(True):
+			time.sleep(1)
+			try:
+				self.btns[self.curFloor[0]-1] = False
+			except IndexError:
+				print("curFloor: %s"%self.curFloor[0])
+			if self.btnChanged():
+				if self.mutex.acquire():
+					self.pipe.send(self.btns)
+					self.mutex.release()
 
 
 class floorPad(threading.Thread):
@@ -106,23 +134,24 @@ class floorPad(threading.Thread):
 		self.floor = floor
 		self.curFloor = curFloor
 		self.btns = btns
-		self.mem = [btns[0], btns[1]]
+		self.mem = [b for b in btns]
 	
 	def btnChanged(self):
-		for i in range(2):
+		for i in range(len(self.btns)):
 			if self.mem[i] != self.btns[i]:
 				self.mem[i] = self.btns[i]
 				return True
 		return False
 
 	def run(self):
-		### recv usr cmd, send to ele
+		if self.mutex.acquire():
+			self.pipe.send(self.btns)
+			self.mutex.release()
 		while(True):
 			time.sleep(1)
 			if self.curFloor[0] == self.floor:
 				self.btns = [False, False]
-			if True:
-			#if self.btnChanged():
+			if self.btnChanged():
 				if self.mutex.acquire():
 					self.pipe.send(self.btns)
 					self.mutex.release()
