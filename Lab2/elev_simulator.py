@@ -29,14 +29,18 @@ class Elevator(Process):
 		if self.curFloor == self.fn:
 			return False
 		for i in range (self.curFloor+1, self.fn+1):
-			if self.downFloors[i-1]==True or self.upFloors[i-1]==True or self.insideFloors[i-1]==True:
+			if self.downFloors[i-1] or self.upFloors[i-1] or self.insideFloors[i-1]:
 				return True
 		return False
 
+	def haveReq(self):
+		return self.insideFloors[self.curFloor] or self.upFloors[self.curFloor] or self.downFloors[self.curFloor]
+    
 	def run(self):
 		print("I am elevator.")
 		while(True):
 			time.sleep(1)
+            
 			# read ctrl pad, update usr cmd
 			if self.pipes[0].poll():
 				self.insideFloors = self.pipes[0].recv()
@@ -45,7 +49,7 @@ class Elevator(Process):
 			for i in range(1,self.fn+1):
 				if self.pipes[i].poll():
 					self.upFloors[i-1], self.downFloors[i-1] = self.pipes[i].recv()
-					# print(self.upFloors[i-1],self.downFloors[i-1])
+                    
 			# move
 			if self.state == 'stop':
 				if self.haveDownReq():
@@ -56,7 +60,7 @@ class Elevator(Process):
 				print("*** Elevator going up from %s to %s..."%(self.curFloor, self.curFloor+1))
 				time.sleep(3)
 				self.curFloor += 1
-				if self.insideFloors[self.curFloor-1] or self.upFloors[self.curFloor-1]:
+				if self.insideFloors[self.curFloor-1] or self.upFloors[self.curFloor-1] or (not self.haveUpReq()):
 					self.state = 'stop'
 				else:
 					self.state = 'up'
@@ -64,7 +68,7 @@ class Elevator(Process):
 				print("*** Elevator going down from %s to %s..."%(self.curFloor, self.curFloor-1))
 				time.sleep(3)
 				self.curFloor -= 1
-				if self.insideFloors[self.curFloor-1] or self.downFloors[self.curFloor-1]:
+				if self.insideFloors[self.curFloor-1] or self.downFloors[self.curFloor-1] or (not self.haveDownReq()):
 					self.state = 'stop'
 				else:
 					self.state = 'down'
@@ -125,12 +129,12 @@ class screen(threading.Thread):
 	def run(self):
 		### recv ele state, show els state
 		while(True):
-			time.sleep(1)
+			time.sleep(0.1)
 			if self.mutex.acquire():
 				if self.pipe.poll():
 					self.curFloor[0],self.curState[0] = self.pipe.recv()
 					print("# %s: elevator on F%s, is %s"%(self.name,self.curFloor[0],self.curState[0]))
-					self.mutex.release()
+				self.mutex.release()
 
 
 class elePad(threading.Thread):
@@ -195,13 +199,15 @@ class floorPad(threading.Thread):
 		if self.mutex.acquire():
 			self.pipe.send(self.btns)
 			self.mutex.release()
+		print("@ F%s btn state: [%s]UP [%s]DOWN"%(self.floor,'*' if self.btns[0] else '','*' if self.btns[1] else ''))
+        
 		while(True):
 			time.sleep(1)
-			print("@ F%s btn state: [%s]UP [%s]DOWN"%(self.floor,'*' if self.btns[0] else '','*' if self.btns[1] else ''))
 			if self.curFloor[0] == self.floor:
 				self.btns[self.upORdown] = False
 			if self.btnChanged():
-				if self.mutex.acquire():
+				print("@ F%s btn state: [%s]UP [%s]DOWN"%(self.floor,'*' if self.btns[0] else '','*' if self.btns[1] else ''))
+				if self.mutex.acquire(1):
 					self.pipe.send(self.btns)
 					self.mutex.release()
 
@@ -229,11 +235,9 @@ if __name__ == "__main__":
 	for i in range(1, 1+n):
 		fcp.append(floorCtrlPad(i, pipes[i][1]))
 	
-	initialSetup()	
+	initialSetup()
 
 	for i in range(1,1+n):
 		fcp[i-1].start()
 	ele.start()
 	ecp.start()
-	
-	
