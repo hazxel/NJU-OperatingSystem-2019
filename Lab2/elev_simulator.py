@@ -5,8 +5,6 @@ import time
 import os
 
 
-eleStates = ['up', 'down', 'stop', 'open', 'close']
-
 class Elevator(Process):
 	def __init__(self, floorNum, pipes):
 		super(Elevator, self).__init__()
@@ -17,11 +15,12 @@ class Elevator(Process):
 		self.upFloors = [False for i in range(floorNum)]
 		self.downFloors = [False for i in range(floorNum)]
 		self.insideFloors = [False for i in range(floorNum)]
+        
 	def haveDownReq(self):
 		if self.curFloor == 1:
 			return False
 		for i in range (1,self.curFloor):
-			if self.downFloors[i-1]==True or self.upFloors[i-1]==True or self.insideFloors[i-1]==True:
+			if self.downFloors[i-1] or self.upFloors[i-1] or self.insideFloors[i-1]:
 				return True
 		return False
 
@@ -76,8 +75,8 @@ class Elevator(Process):
 			# send self state 
 			for p in self.pipes:
 				p.send([self.curFloor, self.state])
-						
 
+                
 class eleCtrlPad(Process):
 	def __init__(self, floorNum, pipe):
 		super(eleCtrlPad, self).__init__()
@@ -95,8 +94,8 @@ class eleCtrlPad(Process):
 		p.start()
 		s.join()
 		p.join()
-		
 
+        
 class floorCtrlPad(Process):
 	def __init__(self, floor, pipe):
 		super(floorCtrlPad, self).__init__()
@@ -114,7 +113,7 @@ class floorCtrlPad(Process):
 		s.start()
 		p.start()
 		s.join()
-		p.join()		
+		p.join()
 
 
 class screen(threading.Thread):
