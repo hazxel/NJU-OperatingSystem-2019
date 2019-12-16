@@ -11,6 +11,8 @@
 #include <sys/stat.h>
 #include <stdint.h>
 
+#include <sys/mman.h>
+
 int v2p(unsigned long, unsigned long*);
 
 int main(void){
@@ -35,7 +37,7 @@ int main(void){
 		printf("open /dev/mem failed.\n");
 		return -1;
 	}
-	long int pos;
+	/*
 	if (lseek(fd, 1048574, SEEK_SET) == -1) {
                 printf("lseek error %d\n", errno);
 		close(fd);
@@ -43,6 +45,13 @@ int main(void){
         }
 	if (read(fd, rdbuf, 2) != 2) {
 		printf("read error %d\n", errno);
+		close(fd);
+		return -1;
+	}
+	*/
+	rdbuf = (char*) mmap(phy, phy, PROT_READ, MAP_SHARED, fd, 0);
+	if (rdbuf < 0) {
+		print("mmap faied %d", errno);
 		close(fd);
 		return -1;
 	}
