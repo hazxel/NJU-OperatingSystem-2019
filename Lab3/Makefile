@@ -5,7 +5,6 @@ all: $(objects)
 
 my_syscall.o:
 
-
 .PHONY : clean cleanobj
 clean:
 	-rm syscall $(objects)

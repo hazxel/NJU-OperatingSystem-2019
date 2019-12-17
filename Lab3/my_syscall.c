@@ -17,9 +17,30 @@ int v2p(unsigned long, unsigned long*);
 
 int main(void){
 	extern int errno;
-	int a = 2;
+	int pid = 917;
+	char path[20];
+	sprintf(path, "/proc/%d/maps", pid);
+	int fd = open(path, O_RDONLY | O_SYNC);
+	if (fd < 0) {
+		printf("Error[%d]: open /proc/%d/maps failed.\n", errno, pid);
+		return -1;
+	}
+	char rdbuf[20];
+	if (read(fd, &rdbuf, 8 * sizeof(char)) != 8 * sizeof(char)) {
+                printf("Error[%d]: read file error.\n", errno);
+                return -1;
+        }
+	rdbuf[8] = '\0';
+	printf("%s\n", rdbuf);
+	char* sttr;
+	unsigned long aa = strtol(rdbuf, &sttr, 16);
+	printf("%08lx\n", aa);
+	return 0;
+	
 
 
+
+	int a=0;
 	//convert the address
 	unsigned long vir = (unsigned long)&a;
 	unsigned long phy = 0;
@@ -31,8 +52,7 @@ int main(void){
 
 
 	//print the pages
-	int fd = open("/dev/mem", O_RDONLY | O_SYNC);
-	char *rdbuf;
+	fd = open("/dev/mem", O_RDONLY | O_SYNC);
 	if (fd < 0){
 		printf("open /dev/mem failed.\n");
 		return -1;
@@ -49,7 +69,7 @@ int main(void){
 		return -1;
 	}
 	*/
-	rdbuf = (char*) mmap(phy, phy, PROT_READ, MAP_SHARED, fd, 0);
+	//rdbuf = (char*) mmap(phy, phy, PROT_READ, MAP_SHARED, fd, 0);
 	if (rdbuf < 0) {
 		print("mmap faied %d", errno);
 		close(fd);
