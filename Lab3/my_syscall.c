@@ -12,11 +12,6 @@
 #define LEN_INIT 20
 
 
-void putIndex(IndexArray*, int);
-void checkCapacity(IndexArray*);
-int isHexNum(char);
-
-
 int main(void){
 	extern int errno;
 	int pid = 555;
@@ -34,6 +29,7 @@ int main(void){
 	}
 	char rdbuf[20];
 	int index;
+	unsigned long phy;
 	char* wtf;
 	unsigned long vir_start;
 	unsigned long phy_start;
@@ -43,7 +39,7 @@ int main(void){
 	unsigned long phy_end;
 	printf("VIRTURAL ADDRESS       PHYSICAL ADDRESS\n");
 	int i;
-	unsigned long j;
+	int j;
 	while (readChars(fd, rdbuf, 8) > 0) {
 		vir_start = strtoul(rdbuf, &wtf, 16);
 		if (v2p(vir_start, &phy_start, pid) == -1) {
@@ -60,40 +56,85 @@ int main(void){
 		v2i(vir_start, &index_start);
 		v2i(vir_end, &index_end);
 		for (j = index_start; j <= index_end; ++j) {
-			putIndex(&ia, index);
-			//printf("size:%d,cap:%d,item:%d\n", ia.size, ia.cap, ia.buff[ia.size - 1]);	
+			putIndex(&ia, j);
 		}
 		printf("0x%08lX-0x%08lX  0x%08lX-0x%08lX\n",
 			vir_start, vir_end, phy_start, phy_end);
 		readLine(fd);
 	}
+	PhyArray pa = {
+		buff : (unsigned long*) malloc(sizeof(unsigned long) * ia.size),
+		size : 0
+	};
+	int form = 0;
+	unsigned long f = 0;
+	for(i = 0; i < ia.size; ++i) {
+		//if (form==ia.buff[i]){printf("!\n");form=ia.buff[i];}
+		if (i2p(ia.buff[i], &phy, pid) != -1) {
+			putPhy(&pa, phy);
+		}
+	}
+	//printf("compare: %d, %d\n", ia.size, pa.size);
+	outputPhy(&pa);
 	close(fd);
 	return 0;
 }
 
+void putPhy(PhyArray *pa, unsigned long phy) {
+	pa -> buff[pa -> size] = phy;
+	pa -> size++;
+}
+
 void putIndex(IndexArray *ia, int index) {
 	checkCapacity(ia);
-	ia->buff[ia->size] = index;
-	ia->size++;
+	ia -> buff[ia -> size] = index;
+	ia -> size++;
 }
 
 void checkCapacity(IndexArray *ia) {
 	if (ia->cap <= ia->size) {
-		int *buff = (int*) malloc(2 * sizeof(int) * ia->cap);
-		memcpy(buff, ia->buff, ia->cap);
+		int *buf = (int*) malloc(2 * sizeof(int) * ia->cap);
+		memcpy(buf, ia->buff, ia->cap * sizeof(int));
 		ia->cap = ia->cap * 2;
 		free(ia->buff);
-		ia->buff = buff;
-		//printf("size:%d,cap:%d,item:%d\n", ia->size, ia->cap, ia->buff[ia->size - 1]);
+		ia->buff = buf;
 	}	
 }
 
-int v2i(unsigned long va, int *index) {
+void v2i(unsigned long va, int *index) {
 	int pageSize = getpagesize();
         *index = va / pageSize;
 }
 
 int i2p(int index, unsigned long *pa, int pid) {
+	unsigned long v_offset = index * sizeof(uint64_t);
+	uint64_t item = 0;
+	char path[20];
+	sprintf(path, "/proc/%d/pagemap", pid);
+	int fd = open(path, O_RDONLY);
+        if (fd < 0) {
+                printf("open /proc/self/pagemap failed.\n");
+                return -1;
+        }
+        if (lseek(fd, v_offset, SEEK_SET) == -1) {
+                printf("lseek error\n");
+		close(fd);
+                return -1;
+        }
+        if (read(fd, &item, sizeof(uint64_t)) != sizeof(uint64_t)) {
+                printf("read item error.\n");
+		close(fd);
+                return -1;
+        }
+        if ((((uint64_t)1 << 63) & item) == 0) {
+                //page present is 0
+		//printf("virtual page %d not in physical memory.\n", index);
+		close(fd);
+                return -1;
+        }
+        *pa = ((((uint64_t) 1 << 55) - 1) & item) * getpagesize();
+	close(fd);
+	return 0;
 }
 
 int v2p(unsigned long va, unsigned long *pa, int pid){
@@ -173,4 +214,30 @@ int readLine(int fd) {
         	}
 	} while (buf != '\n');
 	return 0;
+}
+
+void outputPhy(PhyArray* pa) {
+	if (pa -> size == 0) {printf("none in memory!\n"); return;}
+	if (pa -> size == 1) {printf("only page %lx in mem.\n", pa -> buff[0]); return;}
+	printf("Pages that are present in physical memory:\n"
+	       "> %d pages in total, 4K per page, marked by its beginning address <\n", pa -> size);
+	unsigned long start, end;
+	start = pa -> buff[0];
+	end = pa -> buff[0];
+	int i;
+	for (i = 1; i < pa -> size; ++i) {
+		if (end == pa-> buff[i]) {
+			continue;
+		} else if (end + 0x00001000 == pa -> buff[i]) {
+			end = pa -> buff[i];
+		} else {
+			printf("0x%08lX - 0x%08lX\n", start, end);
+			start = pa -> buff[i];
+			end = pa -> buff[i];
+		}
+
+	}	
+
+
+
 }
