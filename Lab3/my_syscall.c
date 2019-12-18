@@ -4,14 +4,28 @@
 #include <unistd.h>
 #include <stdint.h>
 #include <errno.h>
+#include <string.h>
 
 #include "my_syscall.h"
+
+
+#define LEN_INIT 20
+
+
+void putIndex(IndexArray*, int);
+void checkCapacity(IndexArray*);
+int isHexNum(char);
 
 
 int main(void){
 	extern int errno;
 	int pid = 555;
 	char path[20];
+	IndexArray ia = {
+                buff :  (int*) malloc(sizeof(int) * LEN_INIT),
+                size :  0,
+                cap :  LEN_INIT
+        };
 	sprintf(path, "/proc/%d/maps", pid);
 	int fd = open(path, O_RDONLY | O_SYNC);
 	if (fd < 0) {
@@ -19,14 +33,18 @@ int main(void){
 		return -1;
 	}
 	char rdbuf[20];
+	int index;
 	char* wtf;
 	unsigned long vir_start;
 	unsigned long phy_start;
+	int index_start;
+	int index_end;
 	unsigned long vir_end;
 	unsigned long phy_end;
 	printf("VIRTURAL ADDRESS       PHYSICAL ADDRESS\n");
-	for (int i = 0; i < 20; ++i) {
-		readChars(fd, rdbuf, 8);
+	int i;
+	unsigned long j;
+	while (readChars(fd, rdbuf, 8) > 0) {
 		vir_start = strtoul(rdbuf, &wtf, 16);
 		if (v2p(vir_start, &phy_start, pid) == -1) {
         	        printf("convert error.\n");
@@ -39,6 +57,12 @@ int main(void){
         	        printf("convert error.\n");
                 	return -1;
 	        }
+		v2i(vir_start, &index_start);
+		v2i(vir_end, &index_end);
+		for (j = index_start; j <= index_end; ++j) {
+			putIndex(&ia, index);
+			//printf("size:%d,cap:%d,item:%d\n", ia.size, ia.cap, ia.buff[ia.size - 1]);	
+		}
 		printf("0x%08lX-0x%08lX  0x%08lX-0x%08lX\n",
 			vir_start, vir_end, phy_start, phy_end);
 		readLine(fd);
@@ -47,6 +71,30 @@ int main(void){
 	return 0;
 }
 
+void putIndex(IndexArray *ia, int index) {
+	checkCapacity(ia);
+	ia->buff[ia->size] = index;
+	ia->size++;
+}
+
+void checkCapacity(IndexArray *ia) {
+	if (ia->cap <= ia->size) {
+		int *buff = (int*) malloc(2 * sizeof(int) * ia->cap);
+		memcpy(buff, ia->buff, ia->cap);
+		ia->cap = ia->cap * 2;
+		free(ia->buff);
+		ia->buff = buff;
+		//printf("size:%d,cap:%d,item:%d\n", ia->size, ia->cap, ia->buff[ia->size - 1]);
+	}	
+}
+
+int v2i(unsigned long va, int *index) {
+	int pageSize = getpagesize();
+        *index = va / pageSize;
+}
+
+int i2p(int index, unsigned long *pa, int pid) {
+}
 
 int v2p(unsigned long va, unsigned long *pa, int pid){
 	int pageSize = getpagesize();
@@ -78,7 +126,7 @@ int v2p(unsigned long va, unsigned long *pa, int pid){
 	
 	uint64_t p_pageIndex = ((((uint64_t) 1 << 55) - 1) & item);
 	*pa =  (p_pageIndex * pageSize) + page_offset;
-        
+        /*
 	printf(" *********************************************\n"
                " * virtual addr: 0x%lX\n"
                " * virtual page index: %ld\n"
@@ -86,18 +134,31 @@ int v2p(unsigned long va, unsigned long *pa, int pid){
                " * in-page offset: %ld\n"
 	       " * the No.%ld item in page map is: 0x%016llX\n",
                va, v_pageIndex, p_pageIndex, page_offset, v_pageIndex, item);	
-	
+	*/
 
 	close(fd);
+	return 0;
+}
+
+int isHexNum(char c) {
+	if (c >= 48 && c <= 57) {
+		return 1;
+	} else if (c >= 97 && c <= 102) {
+		return 1;
+	}
 	return 0;
 }
 
 int readChars(int fd, char* rdbuf, int readNum) {
 	int status = read(fd, rdbuf, readNum * sizeof(char));
 	if (status != readNum * sizeof(char)) {
-                printf("Error[%d]: read file error.\n", errno);
-                return -1;
-        } else {
+                if (errno != 0) {
+			printf("Error[%d]: read file error.\n", errno);
+                }
+		return -1;
+        } else if (!isHexNum(rdbuf[0])) {
+		return -1;
+	} else {
 		return status;
 	}
 
