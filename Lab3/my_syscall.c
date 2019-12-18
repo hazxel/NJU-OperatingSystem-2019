@@ -13,7 +13,7 @@
 
 #include <sys/mman.h>
 
-int v2p(unsigned long, unsigned long*);
+int v2p(unsigned long, unsigned long*, int);
 
 int readChars(int, char*, int);
 
@@ -21,7 +21,7 @@ int readLine(int);
 
 int main(void){
 	extern int errno;
-	int pid = 898;
+	int pid = 555;
 	char path[20];
 	sprintf(path, "/proc/%d/maps", pid);
 	int fd = open(path, O_RDONLY | O_SYNC);
@@ -29,88 +29,46 @@ int main(void){
 		printf("Error[%d]: open /proc/%d/maps failed.\n", errno, pid);
 		return -1;
 	}
-	char rdbuf[20] = "?\0";
+	char rdbuf[20];
 	char* wtf;
-	long int vir_start;
-	long int phy_start;
-	long int vir_end;
-	long int phy_end;
-	//printf("test: %lx,%lx\n", (unsigned long)rdbuf, (unsigned long)&rdbuf);
-	readChars(fd, rdbuf, 8);
-	vir_start = strtol(rdbuf, &wtf, 16);
-	phy_start = v2p(vir_start, &phy_start);
-	readChars(fd, rdbuf, 1);
-	readChars(fd, rdbuf, 8);
-	vir_end = strtol(rdbuf, &wtf, 16);
-	phy_end = v2p(vir_end, &phy_end);
-	printf("debug: 0x%08lX, 0x%08lX, 0x%08lX, 0x%08lX\n", vir_start, vir_end, phy_start, phy_end);
-	close(fd);
-	return 0;
-	
-
-
-
-	int a=0;
-	//convert the address
-	unsigned long vir = (unsigned long)&a;
-	unsigned long phy = 0;
-	if (v2p(vir, &phy) == -1) {
-		printf("convert error.\n");
-		return -1;
-	}
-	printf("the virtual  address is: 0x%08lX\nthe physical address is: 0x%08lX\n", vir, phy);
-
-
-	//print the pages
-	fd = open("/dev/mem", O_RDONLY | O_SYNC);
-	if (fd < 0){
-		printf("open /dev/mem failed.\n");
-		return -1;
-	}
-	/*
-	if (lseek(fd, 1048574, SEEK_SET) == -1) {
-                printf("lseek error %d\n", errno);
-		close(fd);
-                return -1;
-        }
-	if (read(fd, rdbuf, 2) != 2) {
-		printf("read error %d\n", errno);
-		close(fd);
-		return -1;
-	}
-	*/
-	//rdbuf = (char*) mmap(phy, phy, PROT_READ, MAP_SHARED, fd, 0);
-	if (rdbuf < 0) {
-		print("mmap faied %d", errno);
-		close(fd);
-		return -1;
-	}
+	unsigned long vir_start;
+	unsigned long phy_start;
+	unsigned long vir_end;
+	unsigned long phy_end;
 	int i;
-	for (i = 0; i < 1; i = i + 1) {
-		printf("mem[%d]:0x%02X\n",i,*(rdbuf + i) & 0xff);
+	for (i = 0; i < 20; ++i) {
+		readChars(fd, rdbuf, 8);
+		vir_start = strtoul(rdbuf, &wtf, 16);
+		if (v2p(vir_start, &phy_start, pid) == -1) {
+        	        printf("convert error.\n");
+                	return -1;
+	        }
+		readChars(fd, rdbuf, 1);
+		readChars(fd, rdbuf, 8);
+		vir_end = strtoul(rdbuf, &wtf, 16);
+		if (v2p(vir_end, &phy_end, pid) == -1) {
+        	        printf("convert error.\n");
+                	return -1;
+	        }
+		printf("debug: VIRTUAL: 0x%08lX - 0x%08lX, PHYSICAL: 0x%08lX - 0x%08lX\n",
+			vir_start, vir_end, phy_start, phy_end);
+		readLine(fd);
 	}
-	//read(fd, rdbuf, phy + 1);
-	//printf("%d\n", *(rdbuf + phy) & 0xff);
-	
 	close(fd);
 	return 0;
 }
 
-int v2p(unsigned long va, unsigned long *pa){
+
+int v2p(unsigned long va, unsigned long *pa, int pid){
 	int pageSize = getpagesize();
 	unsigned long v_pageIndex = va / pageSize;
 	unsigned long v_offset = v_pageIndex * sizeof(uint64_t);
 	unsigned long page_offset = va % pageSize;
 	uint64_t item = 0;
-	printf(" *********************************************\n"
-	       " * virtual addr: 0x%lX\n"
-	       " * page size: %d\n"
-	       " * entry size: %d\n"
-	       " * virtual page index: %ld\n"
-	       " * in-page offset: %ld\n",
-	       va, pageSize, sizeof(uint64_t), v_pageIndex, page_offset);	
+	char path[20];
+        sprintf(path, "/proc/%d/pagemap", pid);
 
-	int fd = open("/proc/self/pagemap", O_RDONLY);
+	int fd = open(path, O_RDONLY);
 	if (fd < 0) {
                 printf("open /proc/self/pagemap failed.\n");
                 return -1;
@@ -123,29 +81,24 @@ int v2p(unsigned long va, unsigned long *pa){
 		printf("read item error\n");
 		return -1;
 	}
-	printf(" * the No.%ld item in page map is: 0x%016llX\n",v_pageIndex, item);
 	if ((((uint64_t)1 << 63) & item) == 0) {
-		printf(" * page present is 0\n");
-		return -1;
+		//printf(" * page present is 0\n");
+		//return -1;
 	}
 	
 	
 	uint64_t p_pageIndex = ((((uint64_t) 1 << 55) - 1) & item);
 	*pa =  (p_pageIndex * pageSize) + page_offset;
-	printf(" * physical page index: %lld\n", p_pageIndex);
-	
-	//struct task_struct *pcb_tmp = NULL;
-        //pgd_t *pgd_tmp = NULL;
-        //pud_t *pud_tmp = NULL;
-        //pmd_t *pmd_tmp = NULL;
-        //pte_t *pte_tmp = NULL;
-	//if(!(pcb_tmp = findTaskByPid(pid)))
-        //{
-        //        printf("Can't find the task %d .\n",pid);
-        //        return 0;
-        //}
-	//printf("pgd = 0x%p\n",pcb_tmp->mm->pgd);
-	//struct task_struct *curr= get_current();     
+        /*
+	printf(" *********************************************\n"
+               " * virtual addr: 0x%lX\n"
+               " * virtual page index: %ld\n"
+	       " * physical page index: %lld\n"
+               " * in-page offset: %ld\n"
+	       " * the No.%ld item in page map is: 0x%016llX\n",
+               va, v_pageIndex, p_pageIndex, page_offset, v_pageIndex, item);	
+	*/
+
 	close(fd);
 	return 0;
 }
@@ -161,3 +114,13 @@ int readChars(int fd, char* rdbuf, int readNum) {
 
 }
 
+int readLine(int fd) {
+	char buf;
+	do {
+		if (read(fd, &buf, sizeof(char)) != sizeof(char)) {
+                	printf("Error[%d]: read file error.\n", errno);
+                	return -1;
+        	}
+	} while (buf != '\n');
+	return 0;
+}
