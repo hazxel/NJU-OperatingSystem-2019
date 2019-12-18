@@ -1,23 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
-//#include <asm/page.h>
-//#include <linux/types.h>
-//#include <linux/dup_types.h>
 #include <fcntl.h>
+#include <unistd.h>
+#include <stdint.h>
 #include <errno.h>
 
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <stdint.h>
+#include "my_syscall.h"
 
-#include <sys/mman.h>
-
-int v2p(unsigned long, unsigned long*, int);
-
-int readChars(int, char*, int);
-
-int readLine(int);
 
 int main(void){
 	extern int errno;
@@ -36,6 +25,7 @@ int main(void){
 	unsigned long vir_end;
 	unsigned long phy_end;
 	int i;
+	printf("VIRTURAL ADDRESS       PHYSICAL ADDRESS\n");
 	for (i = 0; i < 20; ++i) {
 		readChars(fd, rdbuf, 8);
 		vir_start = strtoul(rdbuf, &wtf, 16);
@@ -50,7 +40,7 @@ int main(void){
         	        printf("convert error.\n");
                 	return -1;
 	        }
-		printf("debug: VIRTUAL: 0x%08lX - 0x%08lX, PHYSICAL: 0x%08lX - 0x%08lX\n",
+		printf("0x%08lX-0x%08lX  0x%08lX-0x%08lX\n",
 			vir_start, vir_end, phy_start, phy_end);
 		readLine(fd);
 	}
@@ -89,7 +79,7 @@ int v2p(unsigned long va, unsigned long *pa, int pid){
 	
 	uint64_t p_pageIndex = ((((uint64_t) 1 << 55) - 1) & item);
 	*pa =  (p_pageIndex * pageSize) + page_offset;
-        /*
+        
 	printf(" *********************************************\n"
                " * virtual addr: 0x%lX\n"
                " * virtual page index: %ld\n"
@@ -97,7 +87,7 @@ int v2p(unsigned long va, unsigned long *pa, int pid){
                " * in-page offset: %ld\n"
 	       " * the No.%ld item in page map is: 0x%016llX\n",
                va, v_pageIndex, p_pageIndex, page_offset, v_pageIndex, item);	
-	*/
+	
 
 	close(fd);
 	return 0;
