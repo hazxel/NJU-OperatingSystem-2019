@@ -24,9 +24,8 @@ int main(void){
 	unsigned long phy_start;
 	unsigned long vir_end;
 	unsigned long phy_end;
-	int i;
 	printf("VIRTURAL ADDRESS       PHYSICAL ADDRESS\n");
-	for (i = 0; i < 20; ++i) {
+	for (int i = 0; i < 20; ++i) {
 		readChars(fd, rdbuf, 8);
 		vir_start = strtoul(rdbuf, &wtf, 16);
 		if (v2p(vir_start, &phy_start, pid) == -1) {

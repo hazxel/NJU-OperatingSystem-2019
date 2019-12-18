@@ -1,12 +1,16 @@
-objects = my_syscall.o
+CC = cc
 
-all: $(objects)
-	cc -o syscall $(objects)
+TARGET = main
+
+OBJS = my_syscall.o
+
+$(TARGET): $(OBJS)
+	$(CC) -o $(TARGET) $(OBJS)
 
 my_syscall.o:
 
 .PHONY : clean cleanobj
 clean:
-	-rm syscall $(objects)
+	-rm syscall $(OBJS)
 cleanobj:
-	-rm $(objects1) $(objects2)
+	-rm $(OBJS)
