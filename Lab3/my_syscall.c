@@ -15,9 +15,13 @@
 
 int v2p(unsigned long, unsigned long*);
 
+int readChars(int, char*, int);
+
+int readLine(int);
+
 int main(void){
 	extern int errno;
-	int pid = 917;
+	int pid = 898;
 	char path[20];
 	sprintf(path, "/proc/%d/maps", pid);
 	int fd = open(path, O_RDONLY | O_SYNC);
@@ -25,16 +29,22 @@ int main(void){
 		printf("Error[%d]: open /proc/%d/maps failed.\n", errno, pid);
 		return -1;
 	}
-	char rdbuf[20];
-	if (read(fd, &rdbuf, 8 * sizeof(char)) != 8 * sizeof(char)) {
-                printf("Error[%d]: read file error.\n", errno);
-                return -1;
-        }
-	rdbuf[8] = '\0';
-	printf("%s\n", rdbuf);
-	char* sttr;
-	unsigned long aa = strtol(rdbuf, &sttr, 16);
-	printf("%08lx\n", aa);
+	char rdbuf[20] = "?\0";
+	char* wtf;
+	long int vir_start;
+	long int phy_start;
+	long int vir_end;
+	long int phy_end;
+	//printf("test: %lx,%lx\n", (unsigned long)rdbuf, (unsigned long)&rdbuf);
+	readChars(fd, rdbuf, 8);
+	vir_start = strtol(rdbuf, &wtf, 16);
+	phy_start = v2p(vir_start, &phy_start);
+	readChars(fd, rdbuf, 1);
+	readChars(fd, rdbuf, 8);
+	vir_end = strtol(rdbuf, &wtf, 16);
+	phy_end = v2p(vir_end, &phy_end);
+	printf("debug: 0x%08lX, 0x%08lX, 0x%08lX, 0x%08lX\n", vir_start, vir_end, phy_start, phy_end);
+	close(fd);
 	return 0;
 	
 
@@ -92,11 +102,12 @@ int v2p(unsigned long va, unsigned long *pa){
 	unsigned long v_offset = v_pageIndex * sizeof(uint64_t);
 	unsigned long page_offset = va % pageSize;
 	uint64_t item = 0;
-	printf(" ** virtual addr: 0x%lX\n"
-	       " ** page size: %d\n"
-	       " ** entry size: %d\n"
-	       " ** virtual page index: %ld\n"
-	       " ** in-page offset: %ld\n",
+	printf(" *********************************************\n"
+	       " * virtual addr: 0x%lX\n"
+	       " * page size: %d\n"
+	       " * entry size: %d\n"
+	       " * virtual page index: %ld\n"
+	       " * in-page offset: %ld\n",
 	       va, pageSize, sizeof(uint64_t), v_pageIndex, page_offset);	
 
 	int fd = open("/proc/self/pagemap", O_RDONLY);
@@ -112,16 +123,16 @@ int v2p(unsigned long va, unsigned long *pa){
 		printf("read item error\n");
 		return -1;
 	}
+	printf(" * the No.%ld item in page map is: 0x%016llX\n",v_pageIndex, item);
 	if ((((uint64_t)1 << 63) & item) == 0) {
-		printf("page present is 0\n");
+		printf(" * page present is 0\n");
 		return -1;
 	}
 	
-	printf(" ** the No.%ld item in page map is: 0x%016llX\n",v_pageIndex, item);
 	
 	uint64_t p_pageIndex = ((((uint64_t) 1 << 55) - 1) & item);
 	*pa =  (p_pageIndex * pageSize) + page_offset;
-	printf(" ** physical page index: %lld\n", p_pageIndex);
+	printf(" * physical page index: %lld\n", p_pageIndex);
 	
 	//struct task_struct *pcb_tmp = NULL;
         //pgd_t *pgd_tmp = NULL;
@@ -139,5 +150,14 @@ int v2p(unsigned long va, unsigned long *pa){
 	return 0;
 }
 
+int readChars(int fd, char* rdbuf, int readNum) {
+	int status = read(fd, rdbuf, readNum * sizeof(char));
+	if (status != readNum * sizeof(char)) {
+                printf("Error[%d]: read file error.\n", errno);
+                return -1;
+        } else {
+		return status;
+	}
 
+}
 
