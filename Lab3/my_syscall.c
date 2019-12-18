@@ -8,13 +8,21 @@
 
 #include "my_syscall.h"
 
+//#include <linux/init.h>
+//#include <linux/module.h>
+//#include <asm/linkage.h>
+//#include <linux/kernel.h>
+//#include <linux/unistd.h>
+//#include <asm/uaccess.h>
+//#include <linux/sched.h>
 
 #define LEN_INIT 20
 
-
 int main(void){
 	extern int errno;
-	int pid = 555;
+	int pid;
+	printf("Please enter the PID: ");
+	scanf("%d", &pid);
 	char path[20];
 	IndexArray ia = {
                 buff :  (int*) malloc(sizeof(int) * LEN_INIT),
@@ -66,10 +74,9 @@ int main(void){
 		buff : (unsigned long*) malloc(sizeof(unsigned long) * ia.size),
 		size : 0
 	};
-	int form = 0;
 	unsigned long f = 0;
 	for(i = 0; i < ia.size; ++i) {
-		//if (form==ia.buff[i]){printf("!\n");form=ia.buff[i];}
+		if (i!=0&&ia.buff[i-1]==ia.buff[i]){continue;}
 		if (i2p(ia.buff[i], &phy, pid) != -1) {
 			putPhy(&pa, phy);
 		}
